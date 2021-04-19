@@ -18,60 +18,68 @@ import {
 import TodoInput from 'src/components/TodoInput.vue';
 
 interface Todo {
-  item: string;
+  title: string;
+  isDone: boolean;
 }
 
-function TodoTypeGuard(o: any): o is Todo[] {
-  if (o instanceof Array) {
-    return 'item' in o[0];
+const todoTG = (o: any): o is Todo => {
+  return 'title' in o && 'isDone' in o;
+};
+
+const todoArrayTG = (o: any): o is Todo[] => {
+  if (Array.isArray(o)) {
+    const isTodoArr = o.filter((item) => todoTG(item));
+    return isTodoArr.length === o.length;
   } else {
     return false;
   }
+};
+
+interface StorageIF {
+  save: (item: Todo) => void;
+  fetch: () => Todo[];
 }
+
+const TODO_DATA_KEY = 'todo_key_v1';
+
+const Storage: StorageIF = {
+  save: (item: Todo) => {
+    const localData = Storage.fetch();
+    localData.push(item);
+    localStorage.setItem(TODO_DATA_KEY, JSON.stringify(localData));
+  },
+  fetch: (): Todo[] => {
+    const data = localStorage.getItem(TODO_DATA_KEY) || '[]';
+    const result: unknown = JSON.parse(data);
+    if (todoArrayTG(result)) {
+      return result;
+    } else {
+      return [];
+    }
+  },
+};
 
 export default defineComponent({
   components: { TodoInput },
   name: 'TodoIndex',
   setup() {
-    const state = reactive({
+    const state = reactive<{ item: string; items: Todo[] }>({
       item: '',
+      items: [],
     });
     const handleTodoInput = (s: string) => {
       //console.log(s);
       state.item = s;
     };
     const handleAddTodo = () => {
-      //console.log('add todo' + state.item);
-      const localTodoData = localStorage.getItem('todos');
-      let todoData: Todo[];
-      if (localTodoData) {
-        const d: unknown = JSON.parse(localTodoData);
-        if (TodoTypeGuard(d)) {
-          todoData = d;
-        } else {
-          todoData = [];
-        }
-      } else {
-        todoData = [];
-      }
-      todoData.push({ item: state.item });
-
-      localStorage.setItem('todos', JSON.stringify(todoData));
+      const item: Todo = {
+        title: state.item,
+        isDone: false,
+      };
+      Storage.save(item);
     };
     onMounted(() => {
-      const localTodoData = localStorage.getItem('todos');
-      let todoData: Todo[];
-      if (localTodoData) {
-        const d: unknown = JSON.parse(localTodoData);
-        if (TodoTypeGuard(d)) {
-          todoData = d;
-        } else {
-          todoData = [];
-        }
-      } else {
-        todoData = [];
-      }
-      console.log(todoData);
+      state.items = Storage.fetch();
     });
     return {
       ...toRefs(state),
